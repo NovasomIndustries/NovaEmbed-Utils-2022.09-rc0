@@ -2,7 +2,7 @@
 # $1 : file system name
 # $2 : board name
 # $3 : desired configuration
-BR_VERSION="2020.05.1"
+BR_VERSION="2022.02.5"
 BR="buildroot-${BR_VERSION}"
 BSP_DIR="FsBsp"
 PATCH_DIR="Patches"

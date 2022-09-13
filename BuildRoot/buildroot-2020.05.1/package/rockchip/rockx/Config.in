@@ -1,5 +1,0 @@
-config BR2_PACKAGE_ROCKX
-	bool "rockx"
-	help
-	  rockchip rknn library
-
