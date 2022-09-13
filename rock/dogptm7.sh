@@ -1,6 +1,14 @@
 #!/bin/bash
 BOOTSIZE=128
 CONFIGSIZE=16
+
+# calculate root partition size
+DEPLOYDIR="/Devel/NOVAsdk2020.09/Deploy"
+ROOTFS_REAL_PATH=`readlink -f ${DEPLOYDIR}/uInitrd`
+ROOTFS_REAL_DIR=`dirname ${ROOTFS_REAL_PATH}`
+ROOTFS_REAL_FILE=${ROOTFS_REAL_DIR}/rootfs.ext2
+let ROOTSIZE=`stat --printf="%s" ${ROOTFS_REAL_FILE}`/1024/1024
+
 USERNUM=${1}
 SIZE1=${2}
 SIZE2=${3}
@@ -33,12 +41,12 @@ if [ -z ${IMAGE} ]; then
 fi
 DD_BLOCKSIZE=16
 
-let GPTSIZE=${BOOTSIZE}+${CONFIGSIZE}
+let GPTSIZE=${BOOTSIZE}+${CONFIGSIZE}+${ROOTSIZE}
 if ! [ -z ${SIZE1} ]; then 
-	let GPTSIZE=${BOOTSIZE}+${CONFIGSIZE}+${SIZE1}
+	let GPTSIZE=${BOOTSIZE}+${CONFIGSIZE}+${ROOTSIZE}+${SIZE1}
 fi
 if ! [ -z ${SIZE2} ]; then 
-	let GPTSIZE=${BOOTSIZE}+${CONFIGSIZE}+${SIZE1}+${SIZE2}
+	let GPTSIZE=${BOOTSIZE}+${CONFIGSIZE}+${ROOTSIZE}+${SIZE1}+${SIZE2}
 fi
 let GPTSIZE=${GPTSIZE}+2
 let DD_COUNT=${GPTSIZE}/${DD_BLOCKSIZE}
@@ -69,6 +77,15 @@ let END=${END}+${START}
 mkpart "config" ${START} ${END}
 PART2START=${START}
 PART2END=${END}
+
+# create root partition
+let START=${END}+1
+let END=(1024*1024*${ROOTSIZE}-1)/512
+let END=${END}+${START}
+mkpart "root" ${START} ${END}
+sleep 5
+ROOTSTART=${START}
+ROOTEND=${END}
 
 if [ "${USERNUM}" == "1" ]; then
 	let START=${END}+1
@@ -102,11 +119,12 @@ LOOPDEV=`sudo losetup --partscan --show --find ${IMAGE}`
 if [ "$?" == "0" ]; then
 	sudo mke2fs -q -F -t ext4 -L boot ${LOOPDEV}p1
 	sudo mke2fs -q -F -t ext4 -L config ${LOOPDEV}p2
+	sudo mke2fs -q -F -t ext4 -L root ${LOOPDEV}p3
 	if ! [ "${PART3START}" == "0" ]; then 
-		sudo mke2fs -q -F -t ext4 -L user1 ${LOOPDEV}p3
+		sudo mke2fs -q -F -t ext4 -L user1 ${LOOPDEV}p4
 	fi
 	if ! [ "${PART4START}" == "0" ]; then 
-		sudo mke2fs -q -F -t ext4 -L user2 ${LOOPDEV}p4
+		sudo mke2fs -q -F -t ext4 -L user2 ${LOOPDEV}p5
 	fi
 	sudo dd if=${BOOTDIR}/idbloader.img of=${LOOPDEV} seek=64 status=progress
 	sudo dd if=${BOOTDIR}/u-boot.itb of=${LOOPDEV} seek=16384 status=progress
@@ -120,8 +138,20 @@ if [ "$?" == "0" ]; then
 	sudo cp ${DEPLOYDIR}/m7_dtb.dtb ${FAKEDISK}/dtb.dtb
 	sudo cp ${DEPLOYDIR}/uInitrd ${FAKEDISK}/.
 	sudo cp ${DEPLOYDIR}/boot.scr ${FAKEDISK}/.
-	echo "Files on microSD :"
-	ls -la ${FAKEDISK}
+
+	# copy rootfs files
+	ROOTFROMMOUNT=$(mktemp -d)
+	ROOTTOMOUNT=$(mktemp -d)
+	sudo mount -t ext3 -o loop ${ROOTFS_REAL_FILE} $ROOTFROMMOUNT
+	sudo mount -t ext4 ${LOOPDEV}p3 ${ROOTTOMOUNT}
+	echo "Copying rootfs files from $ROOTFS_REAL_FILE"
+	sudo cp -ar $ROOTFROMMOUNT/* $ROOTTOMOUNT/
+	echo "Files in / on SD:"
+	ls -Al "${ROOTTOMOUNT}"
+	sudo umount $ROOTFROMMOUNT $ROOTTOMOUNT && sudo rm -rf $ROOTFROMMOUNT $ROOTTOMOUNT
+
+	echo "Files in /boot on SD:"
+	ls -Al ${FAKEDISK}
 	sudo umount ${FAKEDISK}
 	if ! [ -z ${STORE_APP} ]; then
 		echo "Storing ${STORE_APP} as application_storage"
