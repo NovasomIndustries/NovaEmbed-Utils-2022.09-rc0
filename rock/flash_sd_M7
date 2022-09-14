@@ -4,7 +4,6 @@
 # ${3} is size of second user partition, if enabled
 # ${4} is the device
 # ${5} is the dtb
-
 USERNUM=${1}
 SIZE1=${2}
 SIZE2=${3}
@@ -27,7 +26,7 @@ clear_resfile
 #${BOOTDIR}/tools/mkimage -n rk3328 -T rksd -d rkbin/rk3328_ddr_786MHz_v1.13.bin /tmp/idbloader.img
 #cat rkbin/rk322xh_miniloader_v2.46.bin >> /tmp/idbloader.img
 #rkbin/tools/loaderimage --pack --uboot ${BOOTDIR}/u-boot-dtb.bin /tmp/uboot.img 0x200000
-mkimage -C none -A arm -T script -d sdboot-novasom-m7.cmd /tmp/boot.scr
+mkimage -C none -A arm -T script -d boot-novasom-m9.cmd ${DEPLOYDIR}/boot.scr
 
 # Compute pointer and size of the file system
 # Leave the same space as empty in file system area
@@ -127,10 +126,10 @@ fi
 sync
 echo "Storing idbloader.img "
 sudo dd if=${BOOTDIR}/idbloader.img of=${DISK}  seek=64 conv=notrunc > /dev/null 2>&1
-echo "Storing u-boot.img"
-sudo dd if=${BOOTDIR}/u-boot.img  of=${DISK} seek=16384 conv=sync,fsync,notrunc
-echo "Storing trust.img "
-sudo dd if=${BOOTDIR}/trust.img  of=${DISK} seek=24576 conv=sync,fsync,notrunc
+echo "Storing u-boot.itb"
+sudo dd if=${BOOTDIR}/u-boot.itb  of=${DISK} seek=16384 conv=sync,fsync,notrunc
+#echo "Storing trust.img "
+#sudo dd if=${BOOTDIR}/trust.img  of=${DISK} seek=24576 conv=sync,fsync,notrunc
 sync
 
 sudo rm -rf /tmp/mdisk
@@ -138,19 +137,20 @@ mkdir /tmp/mdisk
 sudo mount ${DISK}1 /tmp/mdisk
 sudo mkdir /tmp/mdisk/binfiles
 sudo cp ${BOOTDIR}/idbloader.img /tmp/mdisk/binfiles
-sudo cp ${BOOTDIR}/u-boot.img /tmp/mdisk/binfiles
+sudo cp ${BOOTDIR}/u-boot.itb /tmp/mdisk/binfiles
 sudo cp ${BOOTDIR}/trust.img /tmp/mdisk/binfiles
 sudo cp ${KERNELDIR}/${KERNEL} /tmp/mdisk/Image
 sudo cp ${DEPLOYDIR}/m7_dtb.dtb /tmp/mdisk/dtb.dtb
-sudo cp ${DEPLOYDIR}/*.config /tmp/mdisk/.
-sudo cp /tmp/boot.scr /tmp/mdisk/.
+sudo cp ${DEPLOYDIR}/*.config /tmp/mdisk/
+sudo cp ${DEPLOYDIR}/uInitrd /tmp/mdisk/
+sudo cp ${DEPLOYDIR}/boot.scr /tmp/mdisk/
 sudo umount /tmp/mdisk
 sync
 sudo rm -rf /tmp/rootfs
 mkdir /tmp/rootfs
 sudo mount -t ext3 -o loop ${ROOTFS_REAL_FILE} /tmp/rootfs
 sudo mount ${DISK}3 /tmp/mdisk
-sudo cp -a /tmp/rootfs/* /tmp/mdisk/.
+sudo cp -a /tmp/rootfs/* /tmp/mdisk/
 sudo umount /tmp/rootfs /tmp/mdisk
 
 sudo cp /tmp/boot.scr ${DEPLOYDIR}/m7_boot.scr
